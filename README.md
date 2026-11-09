@@ -8,7 +8,7 @@
 ## Estructura del Repositorio
 
 - `k8s/`: Manifiestos YAML de Kubernetes, numerados en orden de aplicación (`00-namespace` → `04-postgres-deployment`). Los de la API se agregan a continuación (`05-...`).
-- `scripts/`: Scripts de despliegue y de evidencia (`redeploy-db.sh`, `test-persistencia.sh`, `dump-db.sh`).
+- `scripts/`: Scripts de despliegue y de evidencia (`deploy-db.sh`, `test-persistencia.sh`, `dump-db.sh`).
 - `api/`: Código fuente de la API REST, Dockerfile y endpoint de salud (`/health`).
 - `floci-aws/`: Scripts de emulación AWS con Floci (IAM, S3, EKS y ECR).
 - `docs-and-tests/`: Colección de Postman, evidencias e informe final.
@@ -54,7 +54,7 @@ kubectl get nodes
 ```bash
 git clone https://github.com/CarlossVillamil/parcial2-infra-paralelas-distri.git
 cd parcial2-infra-paralelas-distri
-bash scripts/redeploy-db.sh
+bash scripts/deploy-db.sh
 ```
 El script aplica, en orden:
 
