@@ -1,9 +1,12 @@
+# Punto extra 1: PersistentVolumeClaim enlazado al PV manual postgres-pv.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
   namespace: parcial2-app
 spec:
+  storageClassName: manual
+  volumeName: postgres-pv
   accessModes:
     - ReadWriteOnce
   resources:

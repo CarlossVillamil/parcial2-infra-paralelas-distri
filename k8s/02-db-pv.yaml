@@ -1,0 +1,18 @@
+# Punto extra 1: PersistentVolume real (reemplaza el emptyDir).
+# Minikube conserva /data del nodo entre reinicios, por eso se usa esa ruta.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  labels:
+    app: postgres
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  hostPath:
+    path: /data/postgres-pv
+    type: DirectoryOrCreate
