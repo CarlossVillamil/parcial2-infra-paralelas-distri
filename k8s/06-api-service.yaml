@@ -1,0 +1,17 @@
+# Service LoadBalancer de la API (lo usa el Integrante 4 con minikube tunnel
+# y el Ingress del Punto Extra 2 como backend).
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: parcial2-app
+  labels:
+    app: parcial2-api
+spec:
+  type: LoadBalancer
+  selector:
+    app: parcial2-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

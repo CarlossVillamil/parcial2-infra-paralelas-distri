@@ -1,0 +1,21 @@
+# Punto Extra 2: Ingress (addon de Minikube) como alternativa al Service LoadBalancer.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  namespace: parcial2-app
+  labels:
+    app: parcial2-api
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.parcial2.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 80
