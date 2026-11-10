@@ -32,7 +32,7 @@ paso "CAPTURA 7a: aws eks create-cluster"
 if aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
   echo "El cluster ya existe"
 else
-  aws eks create-cluster --name "$CLUSTER" --version 1.31 \
+  aws eks create-cluster --name "$CLUSTER" --kubernetes-version 1.31 \
     --role-arn "$ROLE_ARN" --resources-vpc-config "$VPC_CFG"
 fi
 echo "Esperando estado ACTIVE (descarga la imagen k3s la primera vez, puede tardar)..."
