@@ -3,6 +3,13 @@
 # y la evidencia de que CreateNodegroup solo registra metadatos.
 # Usa un kubeconfig APARTE (~/.kube/floci-eks): el contexto de Minikube no se toca.
 # Uso:  bash floci-aws/04-eks.sh
+#
+# IMPORTANTE (problema real encontrado): si el cluster se crea con subredes, Floci crea
+# una red Docker para su VPC emulado con 172.31.0.0/16, el MISMO rango del VPC real de
+# AWS donde vive la EC2, y se conecta a ella con la IP 172.31.0.2 (que en AWS es el DNS
+# del VPC). El puerto 4566 publicado queda apuntando a esa IP y Floci deja de responder
+# desde la EC2. Por eso el cluster se crea SIN VPC y el script vigila que Floci no
+# quede conectado a ninguna red floci-aws-vpc-*.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DIR/env.sh"
@@ -10,32 +17,40 @@ CLUSTER=parcial2-eks
 NODEGROUP=ng-demo
 ROLE_ARN="arn:aws:iam::$FLOCI_ACCOUNT:role/eks-role"
 
-paso "Subred por defecto del VPC emulado (consulta con admin)"
+proteger_floci() {
+  local net
+  for net in $(docker inspect floci --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}'); do
+    case "$net" in
+      floci-aws-vpc-*)
+        echo "AVISO: Floci se conecto a $net (choca con el VPC real 172.31.0.0/16); se desconecta."
+        docker network disconnect "$net" floci ;;
+    esac
+  done
+}
+proteger_floci
+
+paso "Subred por defecto del VPC emulado (solo como metadato del node group)"
 usar_admin
 SUBNET=$(aws ec2 describe-subnets --filters Name=default-for-az,Values=true \
   --query 'Subnets[0].SubnetId' --output text 2>/dev/null || true)
-if [ -z "$SUBNET" ] || [ "$SUBNET" = "None" ]; then
-  echo "AVISO: Floci no devolvio subred por defecto; el cluster se crea sin VPC."
-  VPC_CFG='{}'
-  SUBNET=""
-else
-  echo "Subred: $SUBNET"
-  VPC_CFG="subnetIds=$SUBNET"
-fi
+if [ -z "$SUBNET" ] || [ "$SUBNET" = "None" ]; then SUBNET=subnet-demo; fi
+echo "Subred: $SUBNET"
 
 # A partir de aqui todo con el operador (Floci rechaza test/test para kubectl).
 usar_operador
 export KUBECONFIG="$EKS_KUBECONFIG"
 mkdir -p "$(dirname "$KUBECONFIG")"
 
-paso "CAPTURA 7a: aws eks create-cluster"
-if aws eks describe-cluster --name "$CLUSTER" >/dev/null 2>&1; then
+paso "CAPTURA 7a: aws eks create-cluster (sin VPC, ver nota al inicio del script)"
+if aws eks describe-cluster --name "$CLUSTER" --cli-read-timeout 30 >/dev/null 2>&1; then
   echo "El cluster ya existe"
 else
-  aws eks create-cluster --name "$CLUSTER" --kubernetes-version 1.31 \
-    --role-arn "$ROLE_ARN" --resources-vpc-config "$VPC_CFG"
+  # Floci arranca el k3s durante la llamada: timeout de lectura amplio (60 s por defecto).
+  aws eks create-cluster --cli-read-timeout 600 --name "$CLUSTER" --kubernetes-version 1.31 \
+    --role-arn "$ROLE_ARN" --resources-vpc-config '{}'
 fi
-echo "Esperando estado ACTIVE (descarga la imagen k3s la primera vez, puede tardar)..."
+proteger_floci
+echo "Esperando estado ACTIVE..."
 aws eks wait cluster-active --name "$CLUSTER"
 
 paso "CAPTURA 7b: aws eks describe-cluster"
@@ -44,7 +59,7 @@ aws eks describe-cluster --name "$CLUSTER" \
   --output table
 
 paso "CAPTURA 8: el 'cluster' es UN unico contenedor k3s"
-docker ps --filter name=eks --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+docker ps --filter name=floci-aws-eks --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
 
 paso "aws eks update-kubeconfig (archivo separado: $KUBECONFIG)"
 aws eks update-kubeconfig --name "$CLUSTER" --alias floci-parcial2-eks
@@ -61,11 +76,11 @@ paso "Node group de 2 nodos (solo metadatos en Floci)"
 if aws eks describe-nodegroup --cluster-name "$CLUSTER" --nodegroup-name "$NODEGROUP" >/dev/null 2>&1; then
   echo "El node group ya existe"
 else
-  NG_SUBNET=${SUBNET:-subnet-demo}
-  aws eks create-nodegroup --cluster-name "$CLUSTER" --nodegroup-name "$NODEGROUP" \
-    --node-role "$ROLE_ARN" --subnets "$NG_SUBNET" --instance-types t3.medium \
+  aws eks create-nodegroup --cli-read-timeout 600 --cluster-name "$CLUSTER" --nodegroup-name "$NODEGROUP" \
+    --node-role "$ROLE_ARN" --subnets "$SUBNET" --instance-types t3.medium \
     --scaling-config minSize=2,maxSize=3,desiredSize=2
 fi
+proteger_floci
 aws eks wait nodegroup-active --cluster-name "$CLUSTER" --nodegroup-name "$NODEGROUP"
 
 paso "CAPTURA 11a: AWS dice que hay 2 nodos..."
@@ -77,8 +92,8 @@ paso "CAPTURA 11b: ...pero Kubernetes sigue viendo 1 nodo y hay 1 solo contenedo
 # Floci puede recrear el contenedor al aplicar el tipo t3.medium: se espera a la API.
 for _ in $(seq 1 30); do kubectl get nodes >/dev/null 2>&1 && break; sleep 5; done
 kubectl get nodes -o wide
-echo "Contenedores k3s: $(docker ps -q --filter name=eks | wc -l)"
-docker ps --filter name=eks --format 'table {{.Names}}\t{{.Status}}'
+echo "Contenedores k3s: $(docker ps -q --filter name=floci-aws-eks | wc -l)"
+docker ps --filter name=floci-aws-eks --format 'table {{.Names}}\t{{.Status}}'
 
 paso "Listo. kubectl de tu terminal sigue apuntando a: $(KUBECONFIG= kubectl config current-context)"
 echo "Para comandos manuales contra el EKS usa:  bash floci-aws/kubectl-eks.sh <args>"
