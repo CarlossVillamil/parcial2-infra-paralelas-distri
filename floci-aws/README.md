@@ -8,7 +8,7 @@ Todos los scripts se ejecutan **desde la raiz del repo, en la EC2**, en este ord
 | `02-iam.sh` | 6.2 | Usuario `parcial2-operator`, rol `eks-role`, politica `parcial2-least-privilege`, prueba negativa |
 | `03-s3.sh` | 6.3 | Bucket `parcial2-backups` con `k8s/` y un dump fresco de la BD |
 | `04-eks.sh` | 6.4 | Cluster `parcial2-eks` (k3s), nginx, node group de 2 nodos vs 1 nodo real |
-| `05-ecr.sh` | 6.5 | (pendiente: cuando exista `api/Dockerfile`) |
+| `05-ecr.sh` | 6.5 | Imagen de la API al ECR y Pod en el EKS; reproduce los problemas de DNS y HTTP/HTTPS y aplica la solución |
 
 - `env.sh`: endpoint y credenciales admin publicas del emulador (`test/test`).
 - Las claves del operador se guardan en `~/.floci/operator.env` (fuera del repo). **No las subas a git.**
